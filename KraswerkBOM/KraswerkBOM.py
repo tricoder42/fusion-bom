@@ -73,6 +73,13 @@ def build_table(inputs, panels):
         'bomTable', 'Cut list', len(bom_core.COLUMNS), COLUMN_RATIO)
     table.hasGrid = True
 
+    # Fusion pads every cell and then draws the grid around the padded box,
+    # so the lines sit further apart than the single line of text they are
+    # meant to box in. The gap accumulates down the table until the rules run
+    # through the words. Zero the padding and the grid lands on the rows.
+    table.rowSpacing = 0
+    table.columnSpacing = 0
+
     cells = table.commandInputs
     for column, title in enumerate(bom_core.COLUMNS):
         header = cells.addTextBoxCommandInput(
