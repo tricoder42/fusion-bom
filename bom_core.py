@@ -13,9 +13,14 @@ rotated in the assembly still reports its true size. A panel modelled rotated
 
 Sizes are rough blank sizes: dadoes, rabbets and shaped profiles do not
 shrink the bounding box.
+
+Fusion numbers copies -- Police, Police (1), Police (2) -- and those numbers
+are folded away again here, so one part copied three times is one row of
+three rather than three rows of one.
 """
 
 import os
+import re
 import csv
 
 # Materials treated as sheet goods and written to the cut list. Matched
@@ -35,6 +40,10 @@ SHEET_MATERIALS = [
 ]
 
 CM_TO_MM = 10.0
+
+# The number Fusion hangs off the end of a copy: "Police (1)". It says which
+# copy a part is, not what the part is.
+COPY_SUFFIX = re.compile(r'\s*\(\d+\)$')
 
 COLUMNS = ['Name', 'Part Of', 'Qty', 'Length', 'Width', 'Thickness', 'Material']
 
@@ -91,6 +100,43 @@ def collect(component, parent_name, counts):
         collect(occurrence.component, component.name, counts)
 
 
+def base_name(name):
+    """Drop the copy number from every segment of a part name.
+
+    Names are either "Component" or "Component / Body", and either half can
+    be a numbered copy, so both are stripped. A part actually named "(2)" is
+    left alone rather than stripped down to nothing.
+    """
+    return ' / '.join(COPY_SUFFIX.sub('', part) or part for part in name.split(' / '))
+
+
+def merge_copies(counts):
+    """Fold numbered copies of a part into a single tally.
+
+    Police, Police (1) and Police (2) are one part in three copies, and are
+    counted as such -- but only when they agree on size and material. When
+    they disagree the copy number is the one thing telling the rows apart, so
+    that family is left as it was found: three sizes under one name would be
+    worse than a number nobody asked for.
+
+    Only the part's own name is folded. Parents keep their copy numbers, so a
+    shelf in Skrin and the same shelf in Skrin (1) stay two rows.
+    """
+    families = {}
+    for key, qty in counts.items():
+        family = (base_name(key[0]), key[1])
+        families.setdefault(family, []).append((key, qty))
+
+    merged = {}
+    for (name, parent), members in families.items():
+        shapes = set(key[2:] for key, _ in members)
+        if len(shapes) == 1:
+            merged[(name, parent) + shapes.pop()] = sum(qty for _, qty in members)
+        else:
+            merged.update(members)
+    return merged
+
+
 def sorted_rows(counts, want_sheet):
     """Rows for either the panels or the leftovers, grouped by material."""
     selected = [
@@ -116,6 +162,7 @@ def gather(design):
     """Return (panels, others, tally) for the whole design."""
     counts = {}
     collect(design.rootComponent, '(root)', counts)
+    counts = merge_copies(counts)
     return sorted_rows(counts, True), sorted_rows(counts, False), material_tally(counts)
 
 
