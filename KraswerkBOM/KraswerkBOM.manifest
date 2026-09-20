@@ -1,0 +1,12 @@
+{
+    "autodeskProduct": "Fusion",
+    "type": "addin",
+    "author": "Kraswerk",
+    "description": {
+        "": "Cut-list BOM for cabinetmaking: lists every panel and exports it as CSV."
+    },
+    "version": "1.0",
+    "runOnStartup": true,
+    "supportedOS": "windows|mac",
+    "editEnabled": true
+}
