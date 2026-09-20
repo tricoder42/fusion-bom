@@ -47,6 +47,20 @@ COPY_SUFFIX = re.compile(r'\s*\(\d+\)$')
 
 COLUMNS = ['Name', 'Part Of', 'Qty', 'Length', 'Width', 'Thickness', 'Material']
 
+# Positions in a row, for the code that filters on them.
+NAME = 0
+PART_OF = 1
+QTY = 2
+LENGTH = 3
+WIDTH = 4
+THICKNESS = 5
+MATERIAL = 6
+
+# The columns offered as a tick-list of the values actually present. Qty,
+# Length and Width are left out: they are near enough unique per row, so a
+# list of them would be as long as the cut list itself.
+CHOOSABLE = (PART_OF, THICKNESS, MATERIAL)
+
 
 def is_sheet_material(name):
     low = name.lower()
@@ -149,6 +163,44 @@ def sorted_rows(counts, want_sheet):
         [name, parent, qty, length, width, thickness, material]
         for (name, parent, length, width, thickness, material), qty in selected
     ]
+
+
+def cell_text(value):
+    """A row value as the table and the filters both see it.
+
+    Thicknesses arrive as floats and a tick-list holds strings, so everything
+    is compared as the text the user is actually looking at. That also keeps
+    18.0 from failing to match itself through a float comparison.
+    """
+    return str(value)
+
+
+def distinct(rows, column):
+    """The values present in one column, ordered for a tick-list."""
+    values = set(cell_text(row[column]) for row in rows)
+    try:
+        return sorted(values, key=float)
+    except ValueError:
+        return sorted(values, key=lambda value: value.lower())
+
+
+def matches(row, search, chosen):
+    """Does one row survive the filters?
+
+    search is matched as a case-insensitive substring of the name. chosen maps
+    a column to the set of values ticked for it; an empty set is a filter
+    nobody has touched, so it lets everything through rather than nothing.
+    """
+    if search and search.strip().lower() not in cell_text(row[NAME]).lower():
+        return False
+    for column, allowed in chosen.items():
+        if allowed and cell_text(row[column]) not in allowed:
+            return False
+    return True
+
+
+def filter_rows(rows, search='', chosen=None):
+    return [row for row in rows if matches(row, search, chosen or {})]
 
 
 def material_tally(counts):

@@ -229,6 +229,81 @@ def names_that_only_look_like_copies_are_left_alone():
         check(name, got, want)
 
 
+# --- Filtering ---------------------------------------------------------------
+
+def sample():
+    """A cut list with enough variety for the filters to bite on."""
+    panels, _, _ = gather(Component('Skrin', children=[
+        Component('Police', [Body('Body1', 800, 300, 18)]),
+        Component('BokL', [Body('Body1', 1770, 330, 18)]),
+        Component('BokP', [Body('Body1', 1770, 330, 18, 'MDF 12')]),
+        Component('Zada', [Body('Body1', 1770, 800, 4, 'HDF 4')]),
+    ]))
+    return panels
+
+
+def names(rows):
+    return sorted(row[bom_core.NAME] for row in rows)
+
+
+def no_filters_let_everything_through():
+    rows = sample()
+    check('untouched', names(bom_core.filter_rows(rows)), names(rows))
+    check('empty search', names(bom_core.filter_rows(rows, '')), names(rows))
+    # A tick-list nobody has touched is not a filter that excludes everything.
+    check('empty tick-lists',
+          names(bom_core.filter_rows(rows, '', {bom_core.MATERIAL: set()})), names(rows))
+
+
+def the_name_search_is_a_case_insensitive_substring():
+    rows = sample()
+    check('exact', names(bom_core.filter_rows(rows, 'Police')), ['Police'])
+    check('lowercased', names(bom_core.filter_rows(rows, 'police')), ['Police'])
+    check('substring', names(bom_core.filter_rows(rows, 'bok')), ['BokL', 'BokP'])
+    check('surrounding space', names(bom_core.filter_rows(rows, '  bok  ')), ['BokL', 'BokP'])
+    check('no match', bom_core.filter_rows(rows, 'zzz'), [])
+
+
+def a_tick_list_keeps_only_the_ticked_values():
+    rows = sample()
+    got = bom_core.filter_rows(rows, '', {bom_core.MATERIAL: set(['MDF 12'])})
+    check('one material', names(got), ['BokP'])
+    got = bom_core.filter_rows(rows, '', {bom_core.MATERIAL: set(['MDF 12', 'HDF 4'])})
+    check('two materials', names(got), ['BokP', 'Zada'])
+
+
+def thickness_matches_as_the_text_on_screen():
+    rows = sample()
+    # The row holds 18.0 as a float; the tick-list holds "18.0" as a string.
+    got = bom_core.filter_rows(rows, '', {bom_core.THICKNESS: set(['18.0'])})
+    check('18mm', names(got), ['BokL', 'BokP', 'Police'])
+    check('4mm', names(bom_core.filter_rows(rows, '', {bom_core.THICKNESS: set(['4.0'])})),
+          ['Zada'])
+
+
+def filters_combine_as_and():
+    rows = sample()
+    got = bom_core.filter_rows(rows, 'bok', {bom_core.THICKNESS: set(['18.0'])})
+    check('name and thickness', names(got), ['BokL', 'BokP'])
+    got = bom_core.filter_rows(rows, 'bok', {bom_core.MATERIAL: set(['MDF 12'])})
+    check('name and material', names(got), ['BokP'])
+    got = bom_core.filter_rows(rows, 'police', {bom_core.MATERIAL: set(['MDF 12'])})
+    check('contradictory', got, [])
+
+
+def distinct_deduplicates_and_sorts_numerically():
+    rows = sample()
+    check('thicknesses', bom_core.distinct(rows, bom_core.THICKNESS), ['4.0', '18.0'])
+    check('parents', bom_core.distinct(rows, bom_core.PART_OF), ['Skrin'])
+
+
+def filtering_does_not_alter_the_rows():
+    rows = sample()
+    before = [list(row) for row in rows]
+    bom_core.filter_rows(rows, 'bok', {bom_core.MATERIAL: set(['MDF 12'])})
+    check('rows untouched', [list(row) for row in rows], before)
+
+
 CASES = [
     three_identical_copies_become_one_row,
     a_copy_of_a_different_size_keeps_its_number,
@@ -241,6 +316,13 @@ CASES = [
     non_sheet_parts_merge_the_same_way,
     hidden_and_surface_bodies_are_still_skipped,
     names_that_only_look_like_copies_are_left_alone,
+    no_filters_let_everything_through,
+    the_name_search_is_a_case_insensitive_substring,
+    a_tick_list_keeps_only_the_ticked_values,
+    thickness_matches_as_the_text_on_screen,
+    filters_combine_as_and,
+    distinct_deduplicates_and_sorts_numerically,
+    filtering_does_not_alter_the_rows,
 ]
 
 
